@@ -1,0 +1,23 @@
+FROM apache/airflow:2.9.3-python3.11
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    libpq-dev \
+    gcc \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+# dbt + OpenMetadata ingestion + providers
+RUN pip install --no-cache-dir \
+    "dbt-core==1.8.7" \
+    "dbt-postgres==1.8.2" \
+    "apache-airflow-providers-postgres==5.11.0" \
+    "apache-airflow-providers-http==4.10.0" \
+    "openlineage-airflow==1.19.0" \
+    # Install OM ingestion last so its dbt deps don't override pinned dbt-core
+    "openmetadata-ingestion[postgres]==1.6.3" \
+    "jaraco.context>=4.3" \
+    "jaraco.functools>=4.0"

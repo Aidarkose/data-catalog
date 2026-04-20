@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: daily_flight_stats
+    description: >
+      Daily flight statistics grouped by status.
+      Lightweight metric — aggregates ~135k flights (no joins to 21M tickets).
+      Source: stg_flights → bookings.flights
+    meta:
+      owner: "data-engineering"
+      contains_pii: false
+      refresh_schedule: "daily at 06:00 UTC"
+    columns:
+      - name: flight_date
+        description: "Scheduled departure date"
+        tests: [not_null]
+      - name: status
+        description: "Flight status (Scheduled/On Time/Departed/Arrived/Cancelled/Delayed)"
+        tests: [not_null]
+      - name: flight_count
+        description: "Total flights for this date+status combination"
+      - name: active_count
+        description: "Flights with non-cancelled status"
+      - name: avg_delay_min
+        description: "Average departure delay in minutes (NULL if no actual departures)"
+      - name: max_delay_min
+        description: "Maximum departure delay in minutes"
+      - name: refreshed_at
+        description: "Timestamp of last model refresh"
+
+  - name: daily_table_stats
+    description: >
+      Daily snapshot of all table sizes and estimated row counts.
+      Uses pg_stat_user_tables — no table scans needed.

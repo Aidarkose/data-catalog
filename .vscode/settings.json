@@ -1,0 +1,47 @@
+{
+  "editor.formatOnSave": true,
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+
+  // Python
+  "python.defaultInterpreterPath": "/usr/bin/python3",
+  "python.linting.enabled": true,
+  "python.formatting.provider": "black",
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  },
+
+  // SQL / dbt
+  "[sql]": {
+    "editor.defaultFormatter": "innoverio.vscode-dbt-power-user"
+  },
+  "dbt.dbtProjectsLocations": ["${workspaceFolder}/dbt"],
+  "dbt.dbtPath": "dbt",
+
+  // YAML
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml"
+  },
+  "yaml.schemas": {
+    "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+  },
+
+  // Docker
+  "docker.showStartPage": false,
+
+  // Files
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/dbt/target": true,
+    "**/dbt/dbt_packages": true
+  },
+  "files.associations": {
+    "*.sql": "sql",
+    "profiles.yml": "yaml",
+    "dbt_project.yml": "yaml"
+  },
+
+  // Terminal
+  "terminal.integrated.defaultProfile.linux": "bash"
+}

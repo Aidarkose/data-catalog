@@ -1,0 +1,50 @@
+version: 2
+
+sources:
+  - name: bookings
+    description: "Airline booking system — 2-year demo dataset (demo-20250901-2y)"
+    database: demo
+    schema: bookings
+    tables:
+      - name: flights
+        description: "All scheduled and completed flights"
+        columns:
+          - name: flight_id
+            description: "Unique flight identifier"
+            tests: [not_null, unique]
+          - name: route_no
+            description: "Route code"
+          - name: status
+            description: "Flight status: Scheduled, On Time, Boarding, Departed, Arrived, Cancelled, Delayed"
+          - name: scheduled_departure
+            description: "Scheduled departure time (timestamptz)"
+          - name: scheduled_arrival
+            description: "Scheduled arrival time (timestamptz)"
+          - name: actual_departure
+            description: "Actual departure time (NULL if not yet departed)"
+          - name: actual_arrival
+            description: "Actual arrival time (NULL if not yet arrived)"
+
+      - name: bookings
+        description: "Customer bookings (reservations)"
+
+      - name: tickets
+        description: "Individual tickets per booking"
+
+      - name: boarding_passes
+        description: "Boarding passes issued per ticket"
+
+      - name: seats
+        description: "Aircraft seat map"
+
+      - name: routes
+        description: "Route definitions (origin–destination)"
+
+      - name: airports_data
+        description: "Airport reference data"
+
+      - name: airplanes_data
+        description: "Aircraft type reference data"
+
+      - name: segments
+        description: "Flight segments per ticket"

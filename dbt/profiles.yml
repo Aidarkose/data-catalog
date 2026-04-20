@@ -1,0 +1,24 @@
+data_catalog:
+  target: prod
+  outputs:
+    prod:
+      type: postgres
+      host: "{{ env_var('DEMO_DB_HOST', 'localhost') }}"
+      port: "{{ env_var('DEMO_DB_PORT', '5432') | int }}"
+      user: "{{ env_var('DEMO_DB_USER', 'demo_user') }}"
+      password: "{{ env_var('DEMO_DB_PASSWORD', 'demo_secret_2024') }}"
+      dbname: "{{ env_var('DEMO_DB_NAME', 'demo') }}"
+      schema: public
+      threads: "{{ env_var('DBT_THREADS', '8') | int }}"
+      keepalives_idle: 0
+      connect_timeout: 10
+
+    dev:
+      type: postgres
+      host: localhost
+      port: 5432
+      user: demo_user
+      password: demo_secret_2024
+      dbname: demo_db
+      schema: public
+      threads: 4

@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: stg_flights
+    description: >
+      Cleaned and enriched flights data. Adds flight_date, departure_hour,
+      departure_delay_min, and is_active flag.
+    columns:
+      - name: flight_id
+        tests: [not_null, unique]
+      - name: flight_date
+        tests: [not_null]
+      - name: status
+        tests: [not_null]
+
+  - name: stg_table_catalog
+    description: "All user tables in the database (from information_schema)"
+    columns:
+      - name: full_table_name
+        tests: [not_null, unique]

@@ -1,0 +1,25 @@
+source:
+  type: dbt
+  serviceName: demo_postgres
+  sourceConfig:
+    config:
+      type: DBT
+      dbtConfigSource:
+        dbtConfigType: local
+        dbtCatalogFilePath: /opt/airflow/dbt/target/catalog.json
+        dbtManifestFilePath: /opt/airflow/dbt/target/manifest.json
+      dbtUpdateDescriptions: true
+      includeTags: true
+      dbtClassificationName: dbt_tags
+
+sink:
+  type: metadata-rest
+  config: {}
+
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: http://openmetadata-server:8585/api
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: "eyJraWQiOiJHYjM4OWEtOWY3Ni1nZGpzLWE5MmotMDI0MmJrOTQzNTYiLCJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJvcGVuLW1ldGFkYXRhLm9yZyIsInN1YiI6ImFkbWluIiwicm9sZXMiOlsiQWRtaW4iXSwiZW1haWwiOiJhZG1pbkBvcGVuLW1ldGFkYXRhLm9yZyIsImlzQm90IjpmYWxzZSwidG9rZW5UeXBlIjoiT01fVVNFUiIsImlhdCI6MTc3NjcwNjU1NiwiZXhwIjoxNzc2NzEwMTU2fQ.ld7XqKYeIuF1djzXKJ3WdI36qBipYATsmne20Mc3AYSWI0N3InP9uprPeGKW4cSCZIuYpg9igkVnwOM5Ztcz9ie4ckNllBPRgmSA8uy8qTzNh21QiENe01Lojp-TBaEkQ8gT7MtMAqBhtVVWIuVMOet4LJBtfXsMLMCCZO6zVKxn36SZI-R9nRioMFY6IJeALHW0CNqv0aRq3w2OgQLdfEfFCU5M6me-dQU4Cu3s6C94XOJgisGPKPScsgtREOmGWSfjQvOjErjqHPalg22r-7LwTuimtvu3MDhD96nJOVfAL0CFe8jLfYr1akTbWSPYgqf3bE_gMQh-PugtaTFqfw"

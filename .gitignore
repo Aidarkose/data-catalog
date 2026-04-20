@@ -1,0 +1,35 @@
+# Rename this file to .gitignore
+# Environment
+.env
+*.env
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+*.pyc
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Airflow
+airflow/logs/
+*.log
+
+# Data
+dumps/
+*.sql.gz
+*.sql.bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
