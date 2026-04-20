@@ -5,7 +5,7 @@
   3. После создания — скопируйте URL репозитория и выполните:
 
   cd ~/data-catalog
-  git remote add origin https://github.com/daurena2609/data-catalog.git
+  git remote add origin https://github.com/Aidarkose/data-catalog.git
   git push -u origin master
 
   ▎ Если спросит логин/пароль — используйте Personal Access Token (GitHub → Settings → Developer settings → Personal access tokens → Classic → Generate)
