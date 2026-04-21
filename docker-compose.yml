@@ -1,10 +1,10 @@
 # ================================================================
-# Data Catalog Stack:
-#   PostgreSQL 16  ← source data + metadata DBs
-#   OpenSearch     ← full-text search for OpenMetadata
-#   OpenMetadata   ← Data Catalog (port 8585)
-#   Airflow        ← Orchestration + OM ingestion (port 8080)
-#   dbt            ← runs inside Airflow DAGs
+# OMEGA-3 Data Catalog Stack
+#   PostgreSQL 16        source data + metadata (airflow_db, openmetadata_db)
+#   OpenSearch 2.19.1    search backend for OpenMetadata
+#   OpenMetadata 1.12.5  Data Catalog UI & API (:8585)
+#   Airflow 3.0.2        orchestration (api-server :8080, scheduler, dag-processor)
+#   dbt 1.9.4            runs inside Airflow container, docs on :8090
 # ================================================================
 
 x-airflow-common:
@@ -12,29 +12,31 @@ x-airflow-common:
   build:
     context: .
     dockerfile: Dockerfile.airflow
-  image: data-catalog/airflow:latest
+  image: omega3/airflow:3.0.2
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow_secret_2024@postgres:5432/airflow_db
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLt0jP6bEY=}
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-    AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
-    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
-    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    AIRFLOW__API__BASE_URL: "http://localhost:8080"
+    AIRFLOW__API__HOST: "0.0.0.0"
+    AIRFLOW__API__PORT: "8080"
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:-omega3-jwt-dev-secret-change-me-46bkj}
+    AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
     # OpenLineage → OpenMetadata
-    OPENLINEAGE_URL: "http://openmetadata-server:8585/api/v1/lineage/openlineage"
-    OPENLINEAGE_NAMESPACE: "data_catalog"
+    AIRFLOW__OPENLINEAGE__TRANSPORT: '{"type":"http","url":"http://openmetadata-server:8585/api/v1/lineage/openlineage"}'
+    AIRFLOW__OPENLINEAGE__NAMESPACE: "omega3"
     # dbt
     DBT_PROFILES_DIR: /opt/airflow/dbt
     DBT_PROJECT_DIR: /opt/airflow/dbt
     DBT_THREADS: "8"
-    # OpenMetadata connection for ingestion operators
+    # OpenMetadata (used by ingestion scripts)
     OPENMETADATA_SERVER_URL: "http://openmetadata-server:8585/api"
-    OPENMETADATA_AUTH_PROVIDER: "basic"
-    OPENMETADATA_USERNAME: "admin"
-    OPENMETADATA_PASSWORD: "Admin@1234"
+    OPENMETADATA_AUTH_PROVIDER: "openmetadata"
     # Source DB for dbt
     DEMO_DB_HOST: postgres
     DEMO_DB_PORT: "5432"
@@ -48,28 +50,37 @@ x-airflow-common:
     - ./dbt:/opt/airflow/dbt
     - ./ingestion:/opt/airflow/ingestion
     - airflow_logs:/opt/airflow/logs
+  user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     postgres:
       condition: service_healthy
   networks:
-    - data-catalog-net
+    - omega3-net
 
 services:
 
   # ============================================================
-  # POSTGRES 16 — source data + Airflow DB + OpenMetadata DB
+  # POSTGRES 16 — source (demo) + airflow_db + openmetadata_db
   # ============================================================
   postgres:
     image: postgres:16
-    container_name: dc-postgres
+    container_name: omega3-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres_secret_2024
       POSTGRES_DB: postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=512MB"
+      - "-c"
+      - "work_mem=32MB"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
-      - ./dumps:/dumps:ro
+      - /home/daurena2609/dumps:/dumps:ro
     ports:
       - "5432:5432"
     healthcheck:
@@ -79,18 +90,21 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - data-catalog-net
+      - omega3-net
     restart: unless-stopped
 
   # ============================================================
-  # OPENSEARCH — search backend for OpenMetadata
+  # OPENSEARCH 2.19.1 — search backend for OpenMetadata
   # ============================================================
   opensearch:
     image: opensearchproject/opensearch:2.19.1
-    container_name: dc-opensearch
+    container_name: omega3-opensearch
     environment:
+      - cluster.name=omega3-cluster
+      - node.name=omega3-os-node
       - discovery.type=single-node
-      - OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JAVA_OPTS:--Xms1g -Xmx1g}
       - DISABLE_INSTALL_DEMO_CONFIG=true
       - DISABLE_SECURITY_PLUGIN=true
     ports:
@@ -102,34 +116,32 @@ services:
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
       interval: 30s
       timeout: 15s
-      retries: 15
-      start_period: 120s
+      retries: 20
+      start_period: 90s
     networks:
-      - data-catalog-net
+      - omega3-net
     restart: unless-stopped
     ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
+      memlock: {soft: -1, hard: -1}
+      nofile:  {soft: 65536, hard: 65536}
 
   # ============================================================
-  # OPENMETADATA DB MIGRATION (runs once before server starts)
+  # OPENMETADATA migrate — runs once, then exits
   # ============================================================
   om-migrate:
-    image: openmetadata/server:1.6.3
-    container_name: dc-om-migrate
+    image: openmetadata/server:1.12.5
+    container_name: omega3-om-migrate
     command: "./bootstrap/openmetadata-ops.sh migrate"
     environment:
-      OPENMETADATA_CLUSTER_NAME: data-catalog
+      &om-common-env
+      OPENMETADATA_CLUSTER_NAME: omega3
       SERVER_PORT: "8585"
       SERVER_ADMIN_PORT: "8586"
       LOG_LEVEL: INFO
       DB_DRIVER_CLASS: "org.postgresql.Driver"
       DB_SCHEME: "postgresql"
       DB_USE_SSL: "false"
+      DB_PARAMS: "allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC"
       DB_USER: openmetadata
       DB_USER_PASSWORD: openmetadata_secret_2024
       DB_HOST: postgres
@@ -139,49 +151,13 @@ services:
       ELASTICSEARCH_HOST: opensearch
       ELASTICSEARCH_PORT: "9200"
       ELASTICSEARCH_SCHEME: http
-      PIPELINE_SERVICE_CLIENT_CLASS_NAME: "org.openmetadata.service.clients.pipeline.airflow.AirflowRESTClient"
+      ELASTICSEARCH_USER: ""
+      ELASTICSEARCH_PASSWORD: ""
       SERVER_HOST_API_URL: "http://openmetadata-server:8585/api"
-      AIRFLOW_HOST: "http://airflow-webserver:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      opensearch:
-        condition: service_healthy
-    networks:
-      - data-catalog-net
-
-  # ============================================================
-  # OPENMETADATA SERVER — Data Catalog UI & API (port 8585)
-  # ============================================================
-  openmetadata-server:
-    image: openmetadata/server:1.6.3
-    container_name: dc-openmetadata
-    environment:
-      OPENMETADATA_CLUSTER_NAME: data-catalog
-      SERVER_PORT: "8585"
-      SERVER_ADMIN_PORT: "8586"
-      LOG_LEVEL: INFO
-      # Database
-      DB_DRIVER_CLASS: "org.postgresql.Driver"
-      DB_SCHEME: "postgresql"
-      DB_USE_SSL: "false"
-      DB_USER: openmetadata
-      DB_USER_PASSWORD: openmetadata_secret_2024
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      OM_DATABASE: openmetadata_db
-      # Search
-      SEARCH_TYPE: opensearch
-      ELASTICSEARCH_HOST: opensearch
-      ELASTICSEARCH_PORT: "9200"
-      ELASTICSEARCH_SCHEME: http
-      # Airflow pipeline service
-      PIPELINE_SERVICE_CLIENT_CLASS_NAME: "org.openmetadata.service.clients.pipeline.airflow.AirflowRESTClient"
-      SERVER_HOST_API_URL: "http://openmetadata-server:8585/api"
-      AIRFLOW_HOST: "http://airflow-webserver:8080"
+      PIPELINE_SERVICE_CLIENT_ENDPOINT: "http://airflow-apiserver:8080"
+      AIRFLOW_HOST: "http://airflow-apiserver:8080"
       AIRFLOW_USERNAME: "admin"
       AIRFLOW_PASSWORD: "admin"
-      # Authentication (basic)
       AUTHENTICATION_PROVIDER: basic
       AUTHORIZER_CLASS_NAME: "org.openmetadata.service.security.DefaultAuthorizer"
       AUTHORIZER_REQUEST_FILTER: "org.openmetadata.service.security.JwtFilter"
@@ -189,66 +165,68 @@ services:
       AUTHORIZER_PRINCIPAL_DOMAIN: "open-metadata.org"
       JWT_ISSUER: "open-metadata.org"
       JWT_KEY_ID: "Gb389a-9f76-gdjs-a92j-0242bk94356"
-      # OpenLineage receiver
-      PIPELINE_SERVICE_CLIENT_ENABLED: "true"
+    depends_on:
+      postgres:    {condition: service_healthy}
+      opensearch:  {condition: service_healthy}
+    networks:
+      - omega3-net
+
+  # ============================================================
+  # OPENMETADATA server — Data Catalog UI & API (:8585)
+  # ============================================================
+  openmetadata-server:
+    image: openmetadata/server:1.12.5
+    container_name: omega3-openmetadata
+    environment:
+      <<: *om-common-env
     ports:
       - "8585:8585"
       - "8586:8586"
     depends_on:
-      postgres:
-        condition: service_healthy
-      opensearch:
-        condition: service_healthy
-      om-migrate:
-        condition: service_completed_successfully
+      postgres:    {condition: service_healthy}
+      opensearch:  {condition: service_healthy}
+      om-migrate:  {condition: service_completed_successfully}
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8586/healthcheck || exit 1"]
       interval: 30s
       timeout: 15s
-      retries: 15
+      retries: 20
       start_period: 180s
     networks:
-      - data-catalog-net
+      - omega3-net
     restart: unless-stopped
     volumes:
       - om_data:/opt/openmetadata
 
   # ============================================================
-  # AIRFLOW INIT — creates DB schema + admin user (runs once)
+  # AIRFLOW init — migrate DB + create admin user (runs once)
   # ============================================================
   airflow-init:
     <<: *airflow-common
-    container_name: dc-airflow-init
+    container_name: omega3-airflow-init
     entrypoint: /bin/bash
     command:
       - -c
       - |
+        set -e
         airflow db migrate
-        airflow users create \
-          --username ${AIRFLOW_ADMIN_USER:-admin} \
-          --firstname Admin \
-          --lastname User \
-          --role Admin \
-          --email admin@data-catalog.local \
-          --password ${AIRFLOW_ADMIN_PASSWORD:-admin}
-        echo "Airflow initialized."
+        echo "Airflow 3.0 DB migrated. SimpleAuthManager user: admin/admin."
     restart: "no"
 
   # ============================================================
-  # AIRFLOW WEBSERVER — UI (port 8080)
+  # AIRFLOW api-server (UI + REST API, :8080)
   # ============================================================
-  airflow-webserver:
+  airflow-apiserver:
     <<: *airflow-common
-    container_name: dc-airflow-webserver
-    command: webserver
+    container_name: omega3-airflow-apiserver
+    command: api-server
     ports:
       - "8080:8080"
       - "8090:8090"
     depends_on:
-      airflow-init:
-        condition: service_completed_successfully
+      airflow-init: {condition: service_completed_successfully}
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
       interval: 30s
       timeout: 10s
       retries: 10
@@ -256,37 +234,43 @@ services:
     restart: unless-stopped
 
   # ============================================================
-  # AIRFLOW SCHEDULER — triggers DAGs
+  # AIRFLOW scheduler
   # ============================================================
   airflow-scheduler:
     <<: *airflow-common
-    container_name: dc-airflow-scheduler
+    container_name: omega3-airflow-scheduler
     command: scheduler
     depends_on:
-      airflow-init:
-        condition: service_completed_successfully
+      airflow-init: {condition: service_completed_successfully}
     healthcheck:
-      test: ["CMD", "airflow", "jobs", "check", "--job-type", "SchedulerJob"]
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $$(hostname) || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 60s
     restart: unless-stopped
 
+  # ============================================================
+  # AIRFLOW dag-processor (separate process in 3.0)
+  # ============================================================
+  airflow-dag-processor:
+    <<: *airflow-common
+    container_name: omega3-airflow-dag-processor
+    command: dag-processor
+    depends_on:
+      airflow-init: {condition: service_completed_successfully}
+    restart: unless-stopped
+
 # ============================================================
 # VOLUMES & NETWORKS
 # ============================================================
 volumes:
-  postgres_data:
-    name: dc_postgres_data
-  opensearch_data:
-    name: dc_opensearch_data
-  airflow_logs:
-    name: dc_airflow_logs
-  om_data:
-    name: dc_om_data
+  postgres_data:   {name: omega3_postgres_data}
+  opensearch_data: {name: omega3_opensearch_data}
+  airflow_logs:    {name: omega3_airflow_logs}
+  om_data:         {name: omega3_om_data}
 
 networks:
-  data-catalog-net:
-    name: data-catalog-net
+  omega3-net:
+    name: omega3-net
     driver: bridge

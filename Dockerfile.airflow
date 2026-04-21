@@ -1,23 +1,27 @@
-FROM apache/airflow:2.9.3-python3.11
+FROM apache/airflow:3.0.2-python3.12
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    libpq-dev \
-    gcc \
-    build-essential \
+    git curl libpq-dev gcc build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 USER airflow
 
-# dbt + OpenMetadata ingestion + providers
+# Providers for Airflow 3.0 + Postgres + OpenLineage
 RUN pip install --no-cache-dir \
-    "dbt-core==1.8.7" \
-    "dbt-postgres==1.8.2" \
-    "apache-airflow-providers-postgres==5.11.0" \
-    "apache-airflow-providers-http==4.10.0" \
-    "openlineage-airflow==1.19.0" \
-    # Install OM ingestion last so its dbt deps don't override pinned dbt-core
-    "openmetadata-ingestion[postgres]==1.6.3" \
-    "jaraco.context>=4.3" \
-    "jaraco.functools>=4.0"
+      "apache-airflow-providers-postgres" \
+      "apache-airflow-providers-http" \
+      "apache-airflow-providers-openlineage"
+
+# dbt 1.9
+RUN pip install --no-cache-dir \
+      "dbt-core==1.9.4" \
+      "dbt-postgres==1.9.0"
+
+# OpenMetadata ingestion 1.12 (last, to avoid overriding pinned deps).
+# Latest 1.12.x on PyPI is 1.12.5.3 (matches openmetadata/server:1.12.5 image).
+# `collate-dbt-artifacts-parser` is required by OM 1.12 for dbt lineage ingestion
+# (the public `dbt-artifacts-parser` is NOT sufficient despite similar name).
+RUN pip install --no-cache-dir \
+      "openmetadata-ingestion[postgres]==1.12.5.3" \
+      "collate-dbt-artifacts-parser>=0.1"

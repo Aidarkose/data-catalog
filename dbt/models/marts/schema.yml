@@ -5,7 +5,7 @@ models:
     description: >
       Daily flight statistics grouped by status.
       Lightweight metric — aggregates ~135k flights (no joins to 21M tickets).
-      Source: stg_flights → bookings.flights
+      Source: bookings.flights → stg_flights → daily_flight_stats
     meta:
       owner: "data-engineering"
       contains_pii: false
@@ -27,8 +27,3 @@ models:
         description: "Maximum departure delay in minutes"
       - name: refreshed_at
         description: "Timestamp of last model refresh"
-
-  - name: daily_table_stats
-    description: >
-      Daily snapshot of all table sizes and estimated row counts.
-      Uses pg_stat_user_tables — no table scans needed.
