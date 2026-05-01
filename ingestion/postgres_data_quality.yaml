@@ -1,0 +1,20 @@
+source:
+  type: TestSuite
+  serviceName: demo_postgres.demo.bookings.flights.testSuite
+  sourceConfig:
+    config:
+      type: TestSuite
+      entityFullyQualifiedName: "demo_postgres.demo.bookings.flights"
+processor:
+  type: orm-test-runner
+  config: {}
+sink:
+  type: metadata-rest
+  config: {}
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: "http://openmetadata-server:8585/api"
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: "eyJraWQiOiJHYjM4OWEtOWY3Ni1nZGpzLWE5MmotMDI0MmJrOTQzNTYiLCJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJvcGVuLW1ldGFkYXRhLm9yZyIsInN1YiI6ImluZ2VzdGlvbi1ib3QiLCJyb2xlcyI6WyJJbmdlc3Rpb25Cb3RSb2xlIl0sImVtYWlsIjoiaW5nZXN0aW9uLWJvdEBvcGVuLW1ldGFkYXRhLm9yZyIsImlzQm90Ijp0cnVlLCJ0b2tlblR5cGUiOiJCT1QiLCJ1c2VybmFtZSI6ImluZ2VzdGlvbi1ib3QiLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJpbmdlc3Rpb24tYm90IiwiaWF0IjoxNzc2OTYxMTU5LCJleHAiOm51bGx9.C6ABMtaQSwPeu-4xdoifgFQoLtFDu0OLqwAFe5DLjr98pj9BFr33vPd7JhlVF7ypMrr8HRxTTW_rCSgZ523pNXqqQi98a1KcHLA3KiJWVGq19ebwjhyr8DbLoySZX2UesTzCiOf7oHsHSXXBz3PHnfpyZFn8dMQcm0bB_wU8Kg00vmVwHS1JntlnmpxLmxkk6h7ge5a0BiAz2DZHiaqlIb8ZohzXTj8SliiJie-kB1nz-4cYkcheToNTLw63xEKc_pl5UV6swRVTezb0bUlLd37_H9113Ct3ki3abcOvJzg2aZUB0O86xody8OCCMb-tr6FCE2MgPq8pWgf4Z-PMvg"

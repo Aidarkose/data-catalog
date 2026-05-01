@@ -1,0 +1,43 @@
+source:
+  type: postgres-lineage
+  serviceName: krisha_dwh
+  serviceConnection:
+    config:
+      type: Postgres
+      username: krisha
+      authType:
+        password: krisha_secret_2026
+      hostPort: host.docker.internal:5433
+      database: krisha_dwh
+  sourceConfig:
+    config:
+      type: DatabaseLineage
+      queryLogDuration: 7
+      resultLimit: 1000
+      schemaFilterPattern:
+        includes:
+          - "^raw$"
+          - "^stg$"
+          - "^marts$"
+          - "^marts_dv$"
+      databaseFilterPattern:
+        includes:
+          - "^krisha_dwh$"
+processor:
+  type: query-parser
+  config: {}
+stage:
+  type: table-usage
+  config:
+    filename: /tmp/krisha_dwh_usage
+bulkSink:
+  type: metadata-usage
+  config:
+    filename: /tmp/krisha_dwh_usage
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: "http://openmetadata-server:8585/api"
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: ""

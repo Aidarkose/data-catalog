@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="date_day", model=get_where_subquery(ref('metricflow_time_spine'))) }}

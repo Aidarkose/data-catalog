@@ -50,5 +50,12 @@ with DAG(
             f"-c {INGESTION_DIR}/dbt_lineage.yaml"
         ),
     )
+    ingest_dbt_metrics = BashOperator(
+        task_id="ingest_dbt_metrics",
+        bash_command=(
+            f"python3 {SCRIPTS_DIR}/ingest_dbt_metrics.py "
+            f"--semantic-manifest /opt/airflow/dbt/target/semantic_manifest.json"
+        ),
+    )
 
-    start >> ingest_postgres >> ingest_dbt_lineage >> end
+    start >> ingest_postgres >> ingest_dbt_lineage >> ingest_dbt_metrics >> end

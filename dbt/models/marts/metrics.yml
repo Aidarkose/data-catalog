@@ -1,0 +1,66 @@
+version: 2
+
+# MetricFlow semantic layer — semantic model + 2 metrics on stg_flights
+
+semantic_models:
+  - name: flights_semantic
+    description: >
+      Semantic model built on stg_flights.
+      Provides entities, dimensions, and measures for MetricFlow queries.
+    model: ref('stg_flights')
+
+    entities:
+      - name: flight
+        type: primary
+        expr: flight_id
+
+    dimensions:
+      - name: flight_date
+        type: time
+        type_params:
+          time_granularity: day
+        expr: flight_date
+      - name: status
+        type: categorical
+      - name: departure_hour
+        type: categorical
+        expr: departure_hour
+
+    defaults:
+      agg_time_dimension: flight_date
+
+    measures:
+      - name: flight_count
+        description: "Total number of flights (COUNT of flight_id)"
+        agg: count
+        expr: flight_id
+        agg_time_dimension: flight_date
+
+      - name: avg_delay_min
+        description: >
+          Average departure delay in minutes.
+          Flights without an actual departure (NULL departure_delay_min) are excluded from the average.
+        agg: average
+        expr: departure_delay_min
+        agg_time_dimension: flight_date
+
+metrics:
+  - name: total_flights
+    label: "Total Flights"
+    description: >
+      Total count of flights for a given time period and optional status breakdown.
+      Aggregation: COUNT(flight_id) grouped by flight_date.
+    type: simple
+    type_params:
+      measure: flight_count
+
+  - name: avg_departure_delay_minutes
+    label: "Avg Departure Delay (min)"
+    description: >
+      Average departure delay in minutes across all flights that had an actual departure.
+      Flights without actual_departure (e.g. Cancelled, Scheduled) contribute NULL and
+      are excluded from AVG automatically.
+      Aggregation: AVG(departure_delay_min) grouped by flight_date.
+    type: simple
+    type_params:
+      measure: avg_delay_min

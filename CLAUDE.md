@@ -22,7 +22,9 @@
 
 | Контейнер | URL | Логин / Пароль |
 |-----------|-----|----------------|
-| `omega3-openmetadata` | http://localhost:8585 | admin@open-metadata.org / admin |
+| `omega3-nginx` (фронт OM + AI-виджет) | http://localhost:8585 | admin@open-metadata.org / admin |
+| `omega3-openmetadata` (внутри сети) | http://openmetadata-server:8585 | — |
+| `omega3-ai-chat` (через nginx) | http://localhost:8585/omega3-ai/ | — |
 | `omega3-airflow-apiserver` | http://localhost:8080 | admin / admin |
 | dbt docs serve | http://localhost:8090 | — |
 | `omega3-postgres` | localhost:5432 | postgres / postgres_secret_2024 |
@@ -64,7 +66,40 @@ bookings.flights  (source)
     └─► public_staging.stg_flights         (VIEW)
             └─► public_marts.daily_flight_stats  (TABLE)
                 Метрика: кол-во рейсов + средний/макс delay по (flight_date, status)
+            └─► public_marts.metricflow_time_spine  (TABLE)
+                Time spine для MetricFlow: 2015-01-01..2027-12-31 (daily)
 ```
+
+**MetricFlow семантический слой** (`dbt/models/marts/metrics.yml`):
+- Semantic model `flights_semantic` на `stg_flights` — entity: flight, dims: flight_date/status/hour
+- Metric `total_flights` (COUNT, DAY) — COUNT(flight_id)
+- Metric `avg_departure_delay_minutes` (AVERAGE, DAY) — AVG(departure_delay_min)
+- `semantic_manifest.json` генерируется при `dbt parse`
+
+**dbt-metricflow CLI** (`mf`) — версия 0.11.0, требует dbt-core~=1.10:
+```bash
+# Список метрик
+docker exec omega3-airflow-apiserver bash -lc 'cd /opt/airflow/dbt && mf list metrics'
+
+# Запрос метрики по месяцам
+docker exec omega3-airflow-apiserver bash -lc '
+  cd /opt/airflow/dbt && mf query \
+    --metrics total_flights \
+    --group-by metric_time__month \
+    --order metric_time__month --limit 12'
+
+# Запрос средней задержки по статусу и месяцу
+docker exec omega3-airflow-apiserver bash -lc '
+  cd /opt/airflow/dbt && mf query \
+    --metrics avg_departure_delay_minutes \
+    --group-by flight__status,metric_time__month \
+    --order metric_time__month --limit 12'
+```
+
+**Ingestion метрик в OpenMetadata** (`airflow/scripts/ingest_dbt_metrics.py`):
+- Читает `semantic_manifest.json`, создаёт/обновляет Metric entities через OM REST API (PUT upsert)
+- Запускается в DAG `om_ingestion_dag` после `ingest_dbt_lineage`
+- Ручной запуск: `docker exec omega3-airflow-apiserver python3 /opt/airflow/scripts/ingest_dbt_metrics.py`
 
 **Запуск dbt вручную:**
 ```bash
@@ -178,6 +213,64 @@ OMEGA-3/
     ├── load_dump.sh            ← загрузка дампа + гранты
     └── reset_om_password.py    ← сброс пароля OM admin (при необходимости)
 ```
+
+---
+
+## AI Chat (Gemini + OpenMetadata MCP)
+
+В UI OpenMetadata встроен плавающий AI-виджет (правый нижний угол, кнопка «AI»),
+который не требует переключения вкладок. Ассистент отвечает на вопросы про
+каталог: ищет таблицы, lineage, тесты качества, термины глоссария, владельцев.
+
+**Архитектура:**
+
+```
+Browser → http://localhost:8585 (nginx)
+  ├── /                  → openmetadata-server:8585 (HTML + inject widget.js)
+  ├── /omega3-ai/widget.js → static (плавающая кнопка + iframe)
+  └── /omega3-ai/        → ai-chat:8500 (FastAPI)
+                              ├─► Gemini API (gemini-2.0-flash, бесплатно)
+                              └─► OM MCP (если включён) или OM REST (fallback)
+```
+
+**LLM:** Google Gemini 2.0 Flash (бесплатный tier — 1M токенов/сутки, 15 RPM).
+Ключ в `.env` как `GEMINI_API_KEY`. Модель меняется через `GEMINI_MODEL`.
+
+**Tools:** ai-chat пытается использовать MCP-сервер OpenMetadata (`/mcp`). Если
+MCP App в OM не установлен или JWT нет — автоматически переключается на
+встроенные REST-tools (search_metadata, get_table, get_lineage, list_glossary_terms,
+get_test_results, list_databases). Тег в шапке чата показывает текущий backend.
+
+**Первичная настройка:**
+
+```bash
+# 1) Скопировать env.example → .env и вписать GEMINI_API_KEY
+cp env.example .env
+# отредактировать .env (GEMINI_API_KEY=AIza...)
+
+# 2) Поднять стек (ai-chat сразу работает в REST-режиме через admin login)
+docker compose up -d
+
+# 3) Получить JWT для bot-юзера и записать в .env (опционально, для MCP)
+python3 scripts/setup_ai_chat.py
+docker compose restart ai-chat
+
+# 4) (Опционально) Включить MCP Application в OM:
+#    Settings → Applications → Add Apps → MCP → Install → Schedule
+#    После этого ai-chat подхватит MCP-tools автоматически.
+```
+
+**Использование:** открыть http://localhost:8585 → кнопка «AI» в правом нижнем
+углу → задать вопрос на русском, например:
+- «Какие таблицы есть в схеме bookings?»
+- «Покажи lineage daily_flight_stats на 2 уровня вглубь»
+- «Какой статус у тестов качества по таблице flights?»
+
+**Файлы:**
+- `ai-chat/main.py` — FastAPI + Gemini + MCP/REST tools
+- `ai-chat/static/chat.{html,css,js}` — UI iframe
+- `nginx/nginx.conf` + `nginx/widget.js` — proxy + плавающий виджет
+- `scripts/setup_ai_chat.py` — выдача bot-JWT, проверка MCP App
 
 ---
 

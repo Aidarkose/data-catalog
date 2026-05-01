@@ -63,13 +63,15 @@ with open(args.config) as f:
     config = yaml.safe_load(f)
 
 token = get_token()
-config.setdefault("workflowConfig", {}).setdefault("openMetadataServerConfig", {}).setdefault(
-    "securityConfig", {}
-)["jwtToken"] = token
+sec = config.setdefault("workflowConfig", {}).setdefault("openMetadataServerConfig", {}).setdefault("securityConfig", {})
+if not sec.get("jwtToken"):
+    sec["jwtToken"] = token
 
 from metadata.workflow.metadata import MetadataWorkflow  # noqa: E402
+from metadata.workflow.workflow_output_handler import WorkflowResultStatus  # noqa: E402
 
 workflow = MetadataWorkflow.create(config)
 workflow.execute()
 workflow.print_status()
-sys.exit(workflow.result_status())
+status = workflow.result_status()
+sys.exit(0 if status == WorkflowResultStatus.SUCCESS else 1)

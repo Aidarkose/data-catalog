@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OMEGA-3 AI Помощник</title>
+  <base href="/omega3-ai/">
+  <link rel="stylesheet" href="static/chat.css">
+</head>
+<body>
+  <header class="hdr">
+    <div class="title">
+      <span class="dot"></span>
+      <span>AI помощник по каталогу</span>
+    </div>
+    <div class="meta" id="backend-tag">…</div>
+  </header>
+
+  <main id="messages" class="messages" aria-live="polite">
+    <div class="msg model">
+      <div class="bubble">
+        Привет! Я AI-помощник OMEGA-3. Могу искать таблицы, схемы, lineage,
+        результаты тестов качества, термины глоссария и владельцев данных в
+        OpenMetadata. Спрашивай по-русски, например:
+        <ul>
+          <li>«Какие таблицы есть в схеме <code>bookings</code>?»</li>
+          <li>«Покажи lineage таблицы <code>daily_flight_stats</code>»</li>
+          <li>«Какие термины есть в глоссарии AirlineBookingsGlossary?»</li>
+          <li>«Кто владелец таблицы <code>flights</code>?»</li>
+        </ul>
+      </div>
+    </div>
+  </main>
+
+  <form id="form" class="inputbar" autocomplete="off">
+    <textarea
+      id="input"
+      rows="1"
+      placeholder="Спросить о каталоге данных…"
+      required
+    ></textarea>
+    <button type="submit" id="send">Отпр.</button>
+  </form>
+
+  <script src="static/chat.js"></script>
+</body>
+</html>

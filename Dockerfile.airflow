@@ -13,13 +13,15 @@ RUN pip install --no-cache-dir \
       "apache-airflow-providers-http" \
       "apache-airflow-providers-openlineage"
 
-# dbt 1.9
+# dbt-metricflow 0.11.0 requires dbt-core~=1.10; install it first so that
+# openmetadata-ingestion does not downgrade it further.
+# dbt-postgres 1.9.0 is the latest adapter that pip resolves without conflict.
 RUN pip install --no-cache-dir \
-      "dbt-core==1.9.4" \
-      "dbt-postgres==1.9.0"
+      "dbt-core==1.10.20" \
+      "dbt-postgres==1.9.0" \
+      "dbt-metricflow[dbt-postgres]==0.11.0"
 
-# OpenMetadata ingestion 1.12 (last, to avoid overriding pinned deps).
-# Latest 1.12.x on PyPI is 1.12.5.3 (matches openmetadata/server:1.12.5 image).
+# OpenMetadata ingestion 1.12 (installed last — it may upgrade dbt-core within 1.10.x).
 # `collate-dbt-artifacts-parser` is required by OM 1.12 for dbt lineage ingestion
 # (the public `dbt-artifacts-parser` is NOT sufficient despite similar name).
 RUN pip install --no-cache-dir \

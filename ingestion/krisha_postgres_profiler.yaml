@@ -1,0 +1,41 @@
+source:
+  type: postgres
+  serviceName: krisha_dwh
+  serviceConnection:
+    config:
+      type: Postgres
+      username: krisha
+      authType:
+        password: krisha_secret_2026
+      hostPort: host.docker.internal:5433
+      database: krisha_dwh
+  sourceConfig:
+    config:
+      type: Profiler
+      computeMetrics: true
+      profileSampleType: PERCENTAGE
+      profileSample: 100
+      threadCount: 2
+      timeoutSeconds: 600
+      schemaFilterPattern:
+        includes:
+          - "^raw$"
+          - "^stg$"
+          - "^marts$"
+          - "^marts_dv$"
+      databaseFilterPattern:
+        includes:
+          - "^krisha_dwh$"
+processor:
+  type: orm-profiler
+  config: {}
+sink:
+  type: metadata-rest
+  config: {}
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: "http://openmetadata-server:8585/api"
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: ""

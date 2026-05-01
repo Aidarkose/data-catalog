@@ -1,0 +1,40 @@
+source:
+  type: postgres
+  serviceName: krisha_dwh
+  serviceConnection:
+    config:
+      type: Postgres
+      username: krisha
+      authType:
+        password: krisha_secret_2026
+      hostPort: host.docker.internal:5433
+      database: krisha_dwh
+  sourceConfig:
+    config:
+      type: DatabaseMetadata
+      markDeletedTables: true
+      includeTables: true
+      includeViews: true
+      includeTags: true
+      includeOwners: true
+      overrideMetadata: false
+      threads: 4
+      schemaFilterPattern:
+        includes:
+          - "^raw$"
+          - "^stg$"
+          - "^marts$"
+          - "^marts_dv$"
+      databaseFilterPattern:
+        includes:
+          - "^krisha_dwh$"
+sink:
+  type: metadata-rest
+  config: {}
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: "http://openmetadata-server:8585/api"
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: ""

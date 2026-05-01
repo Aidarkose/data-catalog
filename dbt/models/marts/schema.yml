@@ -1,15 +1,26 @@
 version: 2
 
 models:
+  - name: metricflow_time_spine
+    description: "Time spine for MetricFlow — daily grain from 2015-01-01 to 2027-12-31"
+    time_spine:
+      standard_granularity_column: date_day
+    columns:
+      - name: date_day
+        description: "Calendar date (day granularity)"
+        granularity: day
+        tests: [not_null, unique]
+
   - name: daily_flight_stats
     description: >
       Daily flight statistics grouped by status.
       Lightweight metric — aggregates ~135k flights (no joins to 21M tickets).
       Source: bookings.flights → stg_flights → daily_flight_stats
-    meta:
-      owner: "data-engineering"
-      contains_pii: false
-      refresh_schedule: "daily at 06:00 UTC"
+    config:
+      meta:
+        owner: "data-engineering"
+        contains_pii: false
+        refresh_schedule: "daily at 06:00 UTC"
     columns:
       - name: flight_date
         description: "Scheduled departure date"
