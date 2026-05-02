@@ -50,6 +50,7 @@ x-airflow-common:
     - ./airflow/scripts:/opt/airflow/scripts
     - ./dbt:/opt/airflow/dbt
     - ./ingestion:/opt/airflow/ingestion
+    - /home/daurena2609/KRISHA_DWH/dbt:/opt/airflow/krisha_dbt:ro
     - airflow_logs:/opt/airflow/logs
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
@@ -293,6 +294,46 @@ services:
     restart: unless-stopped
 
   # ============================================================
+  # ATROCORE — Reference Data Management / MDM (:8087)
+  #   PHP 8.4 + Apache, БД хранится в omega3-postgres (atrocore_db)
+  # ============================================================
+  atrocore:
+    build:
+      context: ./atrocore
+      dockerfile: Dockerfile
+      args:
+        SKELETON_VARIANT: atrocore
+        STABILITY: stable
+        DOMAIN: localhost
+        DB_NAME: atrocore_db
+        DB_USER: atrocore
+        DB_PASSWORD: atrocore_secret_2026
+        DB_HOST: omega3-postgres
+        DB_PORT: "5432"
+    image: omega3/atrocore:1.0
+    container_name: omega3-atrocore
+    environment:
+      DB_HOST: omega3-postgres
+      DB_PORT: "5432"
+      PRODUCTION_DOMAIN: localhost
+    ports:
+      - "8087:80"
+    volumes:
+      - atrocore_data:/var/www
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - omega3-net
+    restart: unless-stopped
+
+  # ============================================================
   # NGINX — reverse proxy перед OpenMetadata
   #   * проксирует :8585 → openmetadata-server:8585
   #   * инжектит floating AI-виджет (script tag) во все HTML OM
@@ -323,6 +364,7 @@ volumes:
   opensearch_data: {name: omega3_opensearch_data}
   airflow_logs:    {name: omega3_airflow_logs}
   om_data:         {name: omega3_om_data}
+  atrocore_data:   {name: omega3_atrocore_data}
 
 networks:
   omega3-net:

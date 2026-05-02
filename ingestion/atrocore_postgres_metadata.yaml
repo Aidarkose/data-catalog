@@ -1,14 +1,14 @@
 source:
   type: postgres
-  serviceName: krisha_dwh
+  serviceName: atrocore
   serviceConnection:
     config:
       type: Postgres
-      username: krisha
+      username: atrocore
       authType:
-        password: krisha_secret_2026
-      hostPort: host.docker.internal:5433
-      database: krisha_dwh
+        password: atrocore_secret_2026
+      hostPort: postgres:5432
+      database: atrocore_db
   sourceConfig:
     config:
       type: DatabaseMetadata
@@ -21,14 +21,10 @@ source:
       threads: 4
       schemaFilterPattern:
         includes:
-          - "^raw$"
-          - "^stg$"
-          - "^marts$"
-          - "^marts_dbt$"
-          - "^marts_dv$"
+          - "^public$"
       databaseFilterPattern:
         includes:
-          - "^krisha_dwh$"
+          - "^atrocore_db$"
 sink:
   type: metadata-rest
   config: {}

@@ -8,12 +8,15 @@
 CREATE USER airflow      WITH PASSWORD 'airflow_secret_2024';
 CREATE USER openmetadata WITH PASSWORD 'openmetadata_secret_2024';
 CREATE USER demo_user    WITH PASSWORD 'demo_secret_2024';
+CREATE USER atrocore     WITH PASSWORD 'atrocore_secret_2026';
 
 CREATE DATABASE airflow_db      OWNER airflow;
 CREATE DATABASE openmetadata_db OWNER openmetadata;
+CREATE DATABASE atrocore_db     OWNER atrocore;
 
 GRANT ALL PRIVILEGES ON DATABASE airflow_db      TO airflow;
 GRANT ALL PRIVILEGES ON DATABASE openmetadata_db TO openmetadata;
+GRANT ALL PRIVILEGES ON DATABASE atrocore_db     TO atrocore;
 
 -- demo_user is granted SELECT on source schemas AFTER dump load
 -- (see scripts/load_dump.sh which runs the GRANT block post-restore).

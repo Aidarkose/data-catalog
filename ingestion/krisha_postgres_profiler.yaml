@@ -22,6 +22,7 @@ source:
           - "^raw$"
           - "^stg$"
           - "^marts$"
+          - "^marts_dbt$"
           - "^marts_dv$"
       databaseFilterPattern:
         includes:

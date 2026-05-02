@@ -29,6 +29,7 @@
 | dbt docs serve | http://localhost:8090 | — |
 | `omega3-postgres` | localhost:5432 | postgres / postgres_secret_2024 |
 | `omega3-opensearch` | http://localhost:9200 | без auth |
+| `omega3-atrocore` (RDM/MDM) | http://localhost:8087 | admin / admin (после установки) |
 
 OpenMetadata healthcheck: http://localhost:8586/healthcheck
 
@@ -50,7 +51,9 @@ postgres (superuser)
 │   ├── schema: public_staging  (dbt views)
 │   └── schema: public_marts    (dbt tables — daily_flight_stats, 1225 строк)
 ├── airflow_db          ← метаданные Airflow (user: airflow)
-└── openmetadata_db     ← метаданные OM     (user: openmetadata)
+├── openmetadata_db     ← метаданные OM     (user: openmetadata)
+└── atrocore_db         ← AtroCore RDM/MDM (user: atrocore / atrocore_secret_2026)
+    └── schema: public  (Country, Currency, AirportRefData + служебные таблицы)
 ```
 
 ---
@@ -188,6 +191,48 @@ Warnings про `transaction_timeout` в логах дампа — безоби�
 
 ---
 
+## Внешний проект KRISHA_DWH (Postgres + dbt)
+
+Параллельно стек OMEGA-3 каталогизирует второй проект, лежащий в `~/KRISHA_DWH`
+(собственный postgres на хосте `:5433`, собственный dbt-проект на dbt-core 1.9).
+
+Подключение:
+- KRISHA postgres достижим из контейнеров OMEGA-3 по `host.docker.internal:5433`
+  (см. `ingestion/krisha_*.yaml`).
+- Каталог `~/KRISHA_DWH/dbt` примонтирован read-only в `/opt/airflow/krisha_dbt`
+  во все airflow-сервисы (см. `docker-compose.yml`, секция `x-airflow-common.volumes`).
+  Так `krisha_dbt_lineage.yaml` читает свежий `target/manifest.json` +
+  `target/catalog.json`, сгенерированные на хосте через `dbt parse` +
+  `dbt docs generate` в venv `~/.venvs/krisha-dbt`.
+
+DAG `krisha_om_ingestion_dag` (07:30 UTC ежедневно) гоняет:
+1. `run_om_ingestion.py -c /opt/airflow/ingestion/krisha_postgres_metadata.yaml` —
+   таблицы из схем `raw / stg / marts / marts_dbt / marts_dv`.
+2. `run_dbt_ingestion.py -c /opt/airflow/ingestion/krisha_dbt_lineage.yaml` —
+   dbt models + связи между ними.
+
+Ручной запуск идентичен OMEGA-3-овскому — те же скрипты, другие YAML-конфиги:
+
+```bash
+docker exec omega3-airflow-apiserver python3 \
+  /opt/airflow/scripts/run_om_ingestion.py \
+  -c /opt/airflow/ingestion/krisha_postgres_metadata.yaml
+
+docker exec omega3-airflow-apiserver python3 \
+  /opt/airflow/scripts/run_dbt_ingestion.py \
+  -c /opt/airflow/ingestion/krisha_dbt_lineage.yaml
+```
+
+В OM этот источник появляется как Database Service `krisha_dwh` (Postgres).
+Lineage от `stg.listings` идёт через DV-stage views в `marts_dv.{hub,lnk,sat}_*`
+и в dbt-views `marts_dbt.{listings_current, listing_price_events}`.
+Таблицы `marts.dim_listing` / `marts.fact_listing_price_history` строятся
+Airflow-ом самого KRISHA_DWH (не dbt) — для lineage по ним подключай
+`krisha_postgres_lineage.yaml` (требует pg_stat_statements в БД krisha) либо
+OpenLineage от krisha-airflow.
+
+---
+
 ## Структура проекта
 
 ```
@@ -213,6 +258,110 @@ OMEGA-3/
     ├── load_dump.sh            ← загрузка дампа + гранты
     └── reset_om_password.py    ← сброс пароля OM admin (при необходимости)
 ```
+
+---
+
+## AtroCore — Reference Data Management
+
+**AtroCore** (https://github.com/atrocore/atrocore) — open-source платформа MDM/RDM/PIM
+на PHP 8.4 + Apache. В OMEGA-3 используется как централизованный store справочников
+(коды стран, валюты, IATA-коды аэропортов, ETL-статусы, бизнес-таксономии),
+которые потом каталогизируются в OpenMetadata через ingestion.
+
+**Базовые координаты:**
+
+| Параметр | Значение |
+|----------|----------|
+| URL | http://localhost:8087 |
+| Логин (после первичной установки) | `admin` / `admin` (можно поменять при installer'е) |
+| БД | `omega3-postgres` → `atrocore_db` (user: `atrocore` / `atrocore_secret_2026`) |
+| Skeleton-вариант | `atrocore` (чистое ядро, без PIM) |
+| REST API | `http://localhost:8087/api/v1/{Entity}` (Basic Auth) |
+
+**Архитектура:**
+
+```
+Browser → http://localhost:8087 → omega3-atrocore (Apache + PHP 8.4)
+                                         │
+                                         ▼ pdo_pgsql
+                                  omega3-postgres:5432
+                                         │
+                                         ▼ atrocore_db
+                                  schema: public
+                                  ├── country (RDM-сущность)
+                                  ├── currency (RDM-сущность)
+                                  ├── airport_ref_data (RDM-сущность)
+                                  └── user/team/role/note/... (служебные)
+```
+
+Каждая сущность (Entity), созданная через UI **Settings → Entity Manager** или через
+REST API `POST /api/v1/EntityManager`, автоматически получает таблицу в `public`-схеме
+с автогенерируемой схемой колонок. AtroCore делает миграции через свой console.
+
+**Подключение к БД (psql):**
+
+```bash
+# Из контейнера postgres
+docker exec -it omega3-postgres psql -U atrocore -d atrocore_db
+
+# С хоста (порт 5432 проброшен наружу)
+PGPASSWORD=atrocore_secret_2026 psql -h localhost -p 5432 -U atrocore -d atrocore_db
+
+# Список справочных таблиц
+docker exec omega3-postgres psql -U atrocore -d atrocore_db -c "\dt"
+
+# Содержимое справочника
+docker exec omega3-postgres psql -U atrocore -d atrocore_db -c "SELECT * FROM country LIMIT 10;"
+```
+
+**REST API (примеры):**
+
+```bash
+# Список стран
+curl -u admin:admin http://localhost:8087/api/v1/Country?maxSize=10
+
+# Создать запись
+curl -u admin:admin -X POST http://localhost:8087/api/v1/Country \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Kazakhstan","code":"KZ","phoneCode":"+7"}'
+
+# Обновить (PATCH по id)
+curl -u admin:admin -X PATCH http://localhost:8087/api/v1/Country/{id} \
+  -H 'Content-Type: application/json' \
+  -d '{"phoneCode":"+7"}'
+```
+
+**Сборка/пересборка:**
+
+```bash
+docker compose build atrocore   # 5–10 минут (apt-get + composer install)
+docker compose up -d atrocore
+```
+
+После старта зайти на http://localhost:8087, пройти веб-installer (`data/config.php`
+уже преднастроен на `omega3-postgres:5432/atrocore_db`).
+
+**Ingestion в OpenMetadata:**
+
+```bash
+docker exec omega3-airflow-apiserver python3 \
+  /opt/airflow/scripts/run_om_ingestion.py \
+  -c /opt/airflow/ingestion/atrocore_postgres_metadata.yaml
+```
+
+DAG `atrocore_om_ingestion_dag` (08:00 UTC ежедневно) делает то же по расписанию.
+В OM появится Database Service `atrocore` → `atrocore_db` → схема `public` с таблицами
+справочников.
+
+**Файлы:**
+- `atrocore/Dockerfile` — кастомный билд (адаптация официального с
+  https://gitlab.atrocore.com/atrocore/docker)
+- `atrocore/scripts/{prepare-pim.sh,prepare-pim.php,skeleton-check.sh}` — клонирование
+  skeleton-репозитория и `composer install` на этапе сборки
+- `atrocore/startup.sh` — runtime-перезапись `data/config.php`-host из env
+- `scripts/init-atrocore-db.sql` — идемпотентное создание `atrocore_db` + пользователя
+- `ingestion/atrocore_postgres_metadata.yaml` — OM ingestion-конфиг
+- `airflow/dags/atrocore_om_ingestion_dag.py` — DAG расписания
 
 ---
 
