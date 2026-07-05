@@ -164,11 +164,26 @@ services:
       AIRFLOW_HOST: "http://airflow-apiserver:8080"
       AIRFLOW_USERNAME: "admin"
       AIRFLOW_PASSWORD: "admin"
-      AUTHENTICATION_PROVIDER: basic
+      # --- Единый контур идентичности AD → Keycloak → OIDC (realm bank) ---
+      # Public-клиент openmetadata-omega3 (PKCE). Зеркало настройки om-catalog. Bot-JWT
+      # продолжают работать (собственный JWKS OM в AUTHENTICATION_PUBLIC_KEYS).
+      # ⚠️ LAB/STAGED: data-catalog не запущен и делит хост-порт 8585 с om-catalog (одновременно
+      #   не работают), поэтому вживую здесь НЕ проверялось. Перед запуском: (1) подключить om-server
+      #   к сети mesh-net (для доступа к rdmmesh-keycloak:8080); (2) на существующем томе применить
+      #   OIDC к строке authenticationConfiguration в БД (как в om-catalog), на чистом томе env сам засеется.
+      AUTHENTICATION_PROVIDER: custom-oidc
+      CUSTOM_OIDC_AUTHENTICATION_PROVIDER_NAME: "Keycloak"
+      AUTHENTICATION_CLIENT_TYPE: public
+      AUTHENTICATION_AUTHORITY: "http://localhost:8091/realms/bank"
+      AUTHENTICATION_CLIENT_ID: "openmetadata-omega3"
+      AUTHENTICATION_CALLBACK_URL: "http://localhost:8585/callback"
+      AUTHENTICATION_PUBLIC_KEYS: "[http://rdmmesh-keycloak:8080/realms/bank/protocol/openid-connect/certs, http://openmetadata-server:8585/api/v1/system/config/jwks]"
+      AUTHENTICATION_DISCOVERY_URI: "http://rdmmesh-keycloak:8080/realms/bank/.well-known/openid-configuration"
       AUTHORIZER_CLASS_NAME: "org.openmetadata.service.security.DefaultAuthorizer"
       AUTHORIZER_REQUEST_FILTER: "org.openmetadata.service.security.JwtFilter"
-      AUTHORIZER_ADMIN_PRINCIPALS: "[admin]"
+      AUTHORIZER_ADMIN_PRINCIPALS: "[admin, platform-admin]"
       AUTHORIZER_PRINCIPAL_DOMAIN: "open-metadata.org"
+      AUTHENTICATION_ENABLE_SELF_SIGNUP: "true"
       JWT_ISSUER: "open-metadata.org"
       JWT_KEY_ID: "Gb389a-9f76-gdjs-a92j-0242bk94356"
     depends_on:
